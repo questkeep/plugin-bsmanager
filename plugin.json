@@ -2,7 +2,7 @@
   "id": "bsmanager",
   "name": "BSManager",
   "version": "0.1.0",
-  "description": "Lists the Beat Saber instances managed by BSManager, one game per instance.",
+  "description": "Lists the Beat Saber instances managed by BSManager, one game per instance, and opens BSManager from the Open launcher menu.",
   "author": "Questkeep",
   "icon": "icon.svg",
   "apiVersion": 1,
@@ -15,6 +15,13 @@
         "hint": "The folder that contains your Beat Saber instances (BSManager's BSInstances folder).",
         "as": "/instances",
         "default": "~/BSManager/BSInstances"
+      },
+      {
+        "key": "app",
+        "label": "BSManager program folder",
+        "hint": "The folder with BSManager.exe (BSManager's install folder). The default is where BSManager installs itself.",
+        "as": "/app",
+        "default": "%LOCALAPPDATA%/Programs/bs-manager"
       }
     ],
     "http": []

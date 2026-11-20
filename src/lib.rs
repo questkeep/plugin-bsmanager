@@ -18,6 +18,10 @@ use instances::{EXECUTABLE, Instance};
 
 /// `plugin.json` mounts the user's BSManager instances folder here.
 const INSTANCES_MOUNT: &str = "/instances";
+/// `plugin.json` mounts BSManager's program folder here (read-only; only used to find the exe).
+const APP_MOUNT: &str = "/app";
+/// BSManager's executable in its program folder (the `bsmanager://` handler runs it too).
+const LAUNCHER_EXE: &str = "BSManager.exe";
 const ICON: &str = include_str!("../store-icon.svg");
 /// BSManager's launcher adds this for every instance below `BSInstances` (its `buildBsLaunchArgs`
 /// does so when the version is neither the official Steam nor Oculus install).
@@ -38,6 +42,16 @@ fn to_game(instance: &Instance) -> ImportedGame {
     });
     game.install_dir = Some(dir);
     game
+}
+
+/// The action that opens BSManager: its executable below `app` (a mount path in the sandbox;
+/// Questkeep translates it to the real one), or `None` when the file is not there. One
+/// `is_file` check, so it is cheap enough for the menu.
+fn launcher_action(app: &Path) -> Option<PlayAction> {
+    app.join(LAUNCHER_EXE).is_file().then(|| PlayAction {
+        working_dir: Some(app.display().to_string()),
+        ..PlayAction::file(format!("{}/{LAUNCHER_EXE}", app.display()))
+    })
 }
 
 #[derive(Default)]
@@ -76,8 +90,17 @@ impl Provider for BsManager {
         ICON.into()
     }
 
+    /// The title bar's "Open launcher" menu lists BSManager when `/app/BSManager.exe` exists. No
+    /// `launcher_process`: closing BSManager after playing makes no sense.
+    fn launcher(&self) -> Option<PlayAction> {
+        launcher_action(Path::new(APP_MOUNT))
+    }
+
     /// BSManager counts as installed when its instances folder is mounted (chosen, or the default
-    /// exists).
+    /// exists). Deliberately not `launcher().is_some()` (the trait's default): "installed" means
+    /// the store is synced and offers add-game options, and both need the instances folder (a
+    /// scan without it fails with "choose the folder"). With only the program folder found, the
+    /// plugin shows in the launcher menu but is not synced until the instances folder exists.
     fn is_installed(&self) -> bool {
         Path::new(INSTANCES_MOUNT).is_dir()
     }
@@ -140,6 +163,50 @@ mod tests {
             }
             other => panic!("expected NotConfigured, got {other:?}"),
         }
+        assert!(!BsManager.is_installed());
+    }
+
+    fn temp_dir(name: &str) -> std::path::PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("bsmanager-test-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn the_launcher_is_the_exe_when_it_exists() {
+        let dir = temp_dir("with-exe");
+        std::fs::write(dir.join(LAUNCHER_EXE), b"").unwrap();
+        let action = launcher_action(&dir).unwrap();
+        assert_eq!(action.kind, questkeep_plugin_sdk::model::ActionKind::File);
+        assert_eq!(action.target, format!("{}/BSManager.exe", dir.display()));
+        assert_eq!(action.working_dir, Some(dir.display().to_string()));
+        assert!(action.args.is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn no_launcher_without_the_exe_or_the_folder() {
+        let dir = temp_dir("no-exe");
+        assert!(launcher_action(&dir).is_none());
+        // A folder named like the exe is not the program.
+        std::fs::create_dir(dir.join(LAUNCHER_EXE)).unwrap();
+        assert!(launcher_action(&dir).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(launcher_action(&dir.join("missing")).is_none());
+    }
+
+    #[test]
+    fn the_launcher_uses_the_app_mount_and_has_no_process() {
+        // Native tests have no /app mount.
+        if Path::new(APP_MOUNT).exists() {
+            return;
+        }
+        assert!(BsManager.launcher().is_none());
+        assert!(BsManager.launcher_process().is_none());
+        // Not installed: neither folder is mounted, and the launcher alone would not make it so
+        // (see `is_installed`).
         assert!(!BsManager.is_installed());
     }
 

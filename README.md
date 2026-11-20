@@ -24,7 +24,7 @@ folder first. Each instance appears as `Beat Saber (<instance name>)`.
 
 ### Choosing the instances folder
 
-The plugin reads one folder, the one that contains your Beat Saber instances: BSManager's
+The plugin reads two folders (the second one is described under "Open launcher"). The instances folder is the one that contains your Beat Saber instances: BSManager's
 `BSInstances` folder. Until you choose another, Questkeep uses the default, `~/BSManager/BSInstances`
 (`C:Users<you>BSManagerBSInstances`), if it exists. If you moved BSManager's installation folder
 (BSManager, Settings, Installation folder), or the default does not exist, go to Questkeep, Settings,
@@ -33,6 +33,16 @@ Plugins, BSManager, Folders, **Choose...** and pick the `BSInstances` folder (it
 default. Changing the folder syncs the plugin again. Without a usable folder the sync fails with
 "Choose the BSManager instances folder in Settings > Plugins > BSManager"; an existing folder
 without instances simply lists no games.
+
+### Open launcher
+
+BSManager also appears in the title bar's **Open launcher** menu (the rocket button) and starts
+`BSManager.exe`. For that the plugin needs BSManager's program folder, the second folder setting
+(Settings, Plugins, BSManager, Folders, **BSManager program folder**). The default is
+`%LOCALAPPDATA%/Programs/bs-manager` (where BSManager's installer puts it for the current user); if
+you installed it elsewhere, choose the folder that contains `BSManager.exe`. The menu entry only
+appears when that file exists. This folder is mounted read-only and only used to find and start
+`BSManager.exe`; nothing in it is read or changed. Questkeep does not close BSManager after playing.
 
 ## How it works
 
@@ -76,9 +86,9 @@ What the plugin does, and what it is based on. Facts are from BSManager's source
 - Play action: `Beat Saber.exe` of the instance, with working directory the instance folder and
   the argument `--no-yeet`. No environment can be set from a play action, and no other launch
   options are passed.
-- Paths: the plugin only sees the chosen folder, which Questkeep mounts read-only at
-  `/instances` in the sandbox. It reports `/instances/<instance name>` and
-  `/instances/<instance name>/Beat Saber.exe`; Questkeep translates such paths below a mount to the
+- Paths: the plugin only sees the chosen folders, which Questkeep mounts read-only at
+  `/instances` and `/app` in the sandbox. It reports `/instances/<instance name>` and
+  `/instances/<instance name>/Beat Saber.exe` (and `/app/BSManager.exe` for the launcher); Questkeep translates such paths below a mount to the
   real ones on your PC when it launches the game or opens the folder. BSManager's own `config.json`
   is not read: the folder you choose replaces guessing the location from it.
 
@@ -88,6 +98,7 @@ What the plugin does, and what it is based on. Facts are from BSManager's source
   variables) behaves exactly like BSManager's own launch for instances copied from Steam. Nothing
   was run (no BSManager or game was started while building this). `store: "oculus"` instances
   normally need the Oculus app to be running.
+- That `BSManager.exe` started directly behaves like BSManager's own shortcut (its `bsmanager://` handler runs the same exe); the launcher was checked against Questkeep's plugin host without starting anything. The default program folder is the NSIS per-user default (`%LOCALAPPDATA%/Programs/bs-manager`), seen on one PC, not taken from BSManager's source.
 - The default location (`~/BSManager`) was established from the source; the old
   `Documents/BSManager` location is not the default (choose it as the folder if you still use it).
 - The path translation was checked by loading the built `provider.wasm` in Questkeep's plugin host
@@ -133,7 +144,7 @@ questkeep-plugin-sdk = { path = "../questkeep/crates/questkeep-plugin-sdk" }
 
 | Path | What |
 |---|---|
-| `src/lib.rs` | the `Provider`: the `/instances` mount, logging, turning instances into games |
+| `src/lib.rs` | the `Provider`: the `/instances` and `/app` mounts, `launcher()`, logging, turning instances into games |
 | `src/instances.rs` | reading instance folders and `metadata.config` (no SDK types) |
 | `tests/fixtures/` | made-up instance folders the tests read |
 | `scripts/` | `pack.mjs` (zip), `manifest.mjs` (the host's `plugin.json` rules), `release/` (changesets) |

@@ -17,7 +17,10 @@ test("the real plugin.json is valid (provider.wasm is not required here)", () =>
   assert.equal(manifest.apiVersion, 1);
   assert.deepEqual(manifest.permissions.http, []);
   assert.equal(manifest.permissions.read, undefined);
-  assert.deepEqual(manifest.permissions.folders.map((f) => [f.key, f.as]), [["instances", "/instances"]]);
+  assert.deepEqual(manifest.permissions.folders.map((f) => [f.key, f.as]), [
+    ["instances", "/instances"],
+    ["app", "/app"],
+  ]);
 });
 
 test("validateManifest checks permissions.folders like the host", () => {

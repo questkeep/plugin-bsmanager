@@ -22,8 +22,8 @@ cargo from PowerShell or cmd, not Git Bash (its `link` shadows MSVC's `link.exe`
 
 - `src/lib.rs`: the `Provider`. `src/instances.rs`: parsing, no SDK types, tested against
   `tests/fixtures/`.
-- `plugin.json`: manifest and sandbox permissions (one user-chosen folder, `permissions.folders`, mounted at
-  `/instances`). `icon.svg`: BSManager's logo (registry listing and zip; see
+- `plugin.json`: manifest and sandbox permissions (two user-chosen folders, `permissions.folders`: `instances` mounted at
+  `/instances`, `app` (BSManager's program folder, only used to find `BSManager.exe` for `launcher()`) at `/app`). `icon.svg`: BSManager's logo (registry listing and zip; see
   `THIRD_PARTY_NOTICES.md`); `store-icon.svg`: the one-colour (`currentColor`) version compiled into the store.
 - `scripts/`: `pack.mjs`, `manifest.mjs` (the host's `plugin.json` rules), `zip.mjs`,
   `release/` (changesets, registry entry). `docs/RELEASING.md` describes the release.
