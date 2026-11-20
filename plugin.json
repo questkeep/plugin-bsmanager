@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "description": "Lists the Beat Saber instances managed by BSManager, one game per instance.",
   "author": "Questkeep",
+  "icon": "icon.svg",
   "apiVersion": 1,
   "providers": [{ "wasm": "provider.wasm" }],
   "permissions": {
