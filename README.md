@@ -9,7 +9,8 @@ plain modules with fixture-based tests, the `Provider` is a thin layer on top.
 ## Requirements
 
 - Windows (BSManager's only supported platform for this plugin) with BSManager installed.
-- Questkeep 0.6.0 or newer (plugin API version 1).
+- Questkeep 0.7.0 or newer (plugin API version 1, and the user-chosen folders this plugin uses; an
+  older Questkeep would ignore the folder setting and find nothing).
 
 ## Install
 
@@ -18,23 +19,20 @@ plain modules with fixture-based tests, the `Provider` is a thin layer on top.
   [releases](https://github.com/questkeep/plugin-bsmanager/releases), then Settings, Plugins,
   "Install from file...".
 
-Then run a library sync. Each instance appears as `Beat Saber (<instance name>)`.
+Then run a library sync. If your instances are not in the default place (see below), choose the
+folder first. Each instance appears as `Beat Saber (<instance name>)`.
 
-### If BSManager's data is not in your user folder
+### Choosing the instances folder
 
-The sandbox can only read folders `plugin.json` declares. It declares BSManager's settings folder
-(`%APPDATA%/bs-manager`) and the default instances folder (`~/BSManager/BSInstances`). If you moved
-BSManager's installation folder (BSManager, Settings, Installation folder), the plugin cannot read
-the new place until you declare it. The sync then fails with a message naming the folder. To fix it,
-install the plugin from a folder (or unzip it), edit its `plugin.json` and change the path of the
-`/instances` entry, for example:
-
-```json
-{ "path": "F:/Beat Saber stuff/BSManager/BSInstances", "as": "/instances" }
-```
-
-then install that folder with "Install from folder...". Plugins installed from a folder can be
-reloaded after every edit.
+The plugin reads one folder, the one that contains your Beat Saber instances: BSManager's
+`BSInstances` folder. Until you choose another, Questkeep uses the default, `~/BSManager/BSInstances`
+(`C:Users<you>BSManagerBSInstances`), if it exists. If you moved BSManager's installation folder
+(BSManager, Settings, Installation folder), or the default does not exist, go to Questkeep, Settings,
+Plugins, BSManager, Folders, **Choose...** and pick the `BSInstances` folder (it is the
+`BSManagerBSInstances` folder inside the installation folder). **Use default** goes back to the
+default. Changing the folder syncs the plugin again. Without a usable folder the sync fails with
+"Choose the BSManager instances folder in Settings > Plugins > BSManager"; an existing folder
+without instances simply lists no games.
 
 ## How it works
 
@@ -49,9 +47,6 @@ What the plugin does, and what it is based on. Facts are from BSManager's source
   The default installation folder on Windows is the user's home folder (`app.getPath("home")`), or
   `Documents` if a `Documents/BSManager` folder already exists from older versions. Users can move
   it; the chosen parent folder is stored as `installation-folder` in BSManager's settings.
-- BSManager's settings are an `electron-store` file, `config.json`, in its app-data folder
-  (`%APPDATA%/bs-manager`, which also exists on a real installation). Keys used here:
-  `installation-folder` and `last-version-launched` (a version object with the full `path`).
 - An instance is a folder containing a full Beat Saber install: `Beat Saber.exe` (`BS_EXECUTABLE`)
   and `Beat Saber_Data`. The instance's name is the folder name. BSManager keeps a
   `metadata.config` JSON file in it with an `id` (UUID) and `store` (`steam` or `oculus`).
@@ -78,12 +73,11 @@ What the plugin does, and what it is based on. Facts are from BSManager's source
 - Play action: `Beat Saber.exe` of the instance, with working directory the instance folder and
   the argument `--no-yeet`. No environment can be set from a play action, and no other launch
   options are passed.
-- Real paths: Questkeep launches whatever path a plugin reports and does not translate sandbox
-  mount paths, so the plugin needs the real Windows path of the instances folder. It takes it from
-  `installation-folder` in BSManager's `config.json`, or else from the path of
-  `last-version-launched`. If neither exists (default location, no instance ever started from
-  BSManager), the games are listed without a play action and the log says to start one instance
-  from BSManager once.
+- Paths: the plugin only sees the chosen folder, which Questkeep mounts read-only at
+  `/instances` in the sandbox. It reports `/instances/<instance name>` and
+  `/instances/<instance name>/Beat Saber.exe`; Questkeep translates such paths below a mount to the
+  real ones on your PC when it launches the game or opens the folder. BSManager's own `config.json`
+  is not read: the folder you choose replaces guessing the location from it.
 
 **What could not be verified**
 
@@ -91,8 +85,10 @@ What the plugin does, and what it is based on. Facts are from BSManager's source
   variables) behaves exactly like BSManager's own launch for instances copied from Steam. Nothing
   was run (no BSManager or game was started while building this). `store: "oculus"` instances
   normally need the Oculus app to be running.
-- The default location (`~/BSManager`) and `%APPDATA%/bs-manager` were established from the source
-  and one real `config.json`; the old `Documents/BSManager` location is not mounted.
+- The default location (`~/BSManager`) was established from the source; the old
+  `Documents/BSManager` location is not the default (choose it as the folder if you still use it).
+- The path translation was checked by loading the built `provider.wasm` in Questkeep's plugin host
+  against a copy of the test fixtures (not by running the app).
 - Instance versions are not shown: BSManager reads them from the binary `globalgamemanagers`
   file, which the plugin does not parse. The instance name is usually the version when the user
   did not rename it.
@@ -134,10 +130,9 @@ questkeep-plugin-sdk = { path = "../questkeep/crates/questkeep-plugin-sdk" }
 
 | Path | What |
 |---|---|
-| `src/lib.rs` | the `Provider`: sandbox mounts, logging, turning instances into games |
+| `src/lib.rs` | the `Provider`: the `/instances` mount, logging, turning instances into games |
 | `src/instances.rs` | reading instance folders and `metadata.config` (no SDK types) |
-| `src/config.rs` | BSManager's `config.json`: where the instances really are |
-| `tests/fixtures/` | made-up instance folders and settings files the tests read |
+| `tests/fixtures/` | made-up instance folders the tests read |
 | `scripts/` | `pack.mjs` (zip), `manifest.mjs` (the host's `plugin.json` rules), `release/` (changesets) |
 
 ## Releasing

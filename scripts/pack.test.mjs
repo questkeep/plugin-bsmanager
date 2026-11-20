@@ -16,6 +16,28 @@ test("the real plugin.json is valid (provider.wasm is not required here)", () =>
   assert.equal(manifest.id, "bsmanager");
   assert.equal(manifest.apiVersion, 1);
   assert.deepEqual(manifest.permissions.http, []);
+  assert.equal(manifest.permissions.read, undefined);
+  assert.deepEqual(manifest.permissions.folders.map((f) => [f.key, f.as]), [["instances", "/instances"]]);
+});
+
+test("validateManifest checks permissions.folders like the host", () => {
+  const base = {
+    id: "my-store",
+    name: "X",
+    version: "1.0.0",
+    apiVersion: 1,
+    providers: [{ wasm: "provider.wasm" }],
+  };
+  const folder = { key: "games", label: "Games", as: "/games", default: "~/Games" };
+  const check = (folders, read = []) =>
+    validateManifest({ ...base, permissions: { read, folders } });
+  assert.deepEqual(check([folder]), []);
+  assert.ok(check([{ ...folder, key: "Games" }]).length > 0);
+  assert.ok(check([{ ...folder, label: " " }]).length > 0);
+  assert.ok(check([{ ...folder, default: "" }]).length > 0);
+  assert.ok(check([{ ...folder, as: "/data" }]).length > 0);
+  assert.ok(check([folder, { ...folder, as: "/other" }]).length > 0);
+  assert.ok(check([folder], [{ path: "~/X", as: "/games" }]).length > 0);
 });
 
 test("validateManifest follows the host's rules", () => {

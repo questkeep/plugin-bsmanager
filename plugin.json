@@ -7,9 +7,14 @@
   "apiVersion": 1,
   "providers": [{ "wasm": "provider.wasm" }],
   "permissions": {
-    "read": [
-      { "path": "%APPDATA%/bs-manager", "as": "/config" },
-      { "path": "~/BSManager/BSInstances", "as": "/instances" }
+    "folders": [
+      {
+        "key": "instances",
+        "label": "BSManager instances folder",
+        "hint": "The folder that contains your Beat Saber instances (BSManager's BSInstances folder).",
+        "as": "/instances",
+        "default": "~/BSManager/BSInstances"
+      }
     ],
     "http": []
   }

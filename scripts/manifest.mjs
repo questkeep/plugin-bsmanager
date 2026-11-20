@@ -62,6 +62,24 @@ export function validateManifest(manifest, fileExists = () => true) {
     if (mounts.includes(read.as)) add(`Two folder permissions use the same name "${read.as}".`);
     mounts.push(read.as);
   }
+  const keys = [];
+  for (const folder of manifest.permissions?.folders ?? []) {
+    if (!/^[a-z0-9-]{1,32}$/.test(folder?.key ?? "")) {
+      add(`The folder key "${folder?.key}" is not valid: use 1 to 32 lowercase letters, digits and dashes.`);
+    }
+    if (keys.includes(folder?.key)) add(`Two folders use the same key "${folder.key}".`);
+    keys.push(folder?.key);
+    if (typeof folder?.label !== "string" || folder.label.trim() === "") {
+      add(`The folder "${folder?.key}" has no label.`);
+    }
+    if (folder?.default !== undefined && (typeof folder.default !== "string" || folder.default.trim() === "")) {
+      add(`The default of the folder "${folder?.key}" is empty.`);
+    }
+    const problem = checkMount(folder?.as);
+    if (problem) add(problem);
+    if (mounts.includes(folder?.as)) add(`Two folder permissions use the same name "${folder.as}".`);
+    mounts.push(folder?.as);
+  }
   for (const host of manifest.permissions?.http ?? []) {
     const rest = String(host).trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^\*\./, "");
     if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/.test(rest)) {

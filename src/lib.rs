@@ -1,14 +1,12 @@
 //! Questkeep store plugin for BSManager (<https://github.com/Zagrios/bs-manager>): lists its Beat
 //! Saber instances, one game per instance.
 //!
-//! The file reading lives in [`instances`] and [`config`] (unit-tested natively); this file is
-//! the `Provider` that wires them to the sandbox mounts declared in `plugin.json`:
-//!
-//! - `/instances`: BSManager's `BSInstances` folder (read-only)
-//! - `/config`: BSManager's app-data folder, for `config.json` (read-only)
+//! The file reading lives in [`instances`] (unit-tested natively); this file is the `Provider`
+//! that wires it to the folder the user chooses (`permissions.folders` in `plugin.json`), which
+//! Questkeep mounts read-only at `/instances`. Paths the plugin reports start with that mount
+//! path; the host translates them to the real paths on this PC.
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
-pub mod config;
 pub mod instances;
 
 use std::path::Path;
@@ -16,49 +14,29 @@ use std::path::Path;
 use questkeep_plugin_sdk::model::{ImportedGame, PlayAction};
 use questkeep_plugin_sdk::{Provider, ProviderError, export_provider, log};
 
-use config::Config;
 use instances::{EXECUTABLE, Instance};
 
-/// `plugin.json` mounts BSManager's instances folder here.
+/// `plugin.json` mounts the user's BSManager instances folder here.
 const INSTANCES_MOUNT: &str = "/instances";
-/// `plugin.json` mounts BSManager's app-data folder at `/config`.
-const CONFIG_FILE: &str = "/config/config.json";
 const ICON: &str = include_str!("../icon.svg");
 /// BSManager's launcher adds this for every instance below `BSInstances` (its `buildBsLaunchArgs`
 /// does so when the version is neither the official Steam nor Oculus install).
 const LAUNCH_ARGS: &str = "--no-yeet";
+/// Shown when nothing is mounted at `/instances`.
+const NOT_CONFIGURED: &str = "BSManager's instances folder was not found. Choose the BSManager instances folder in Settings > Plugins > BSManager.";
 
-/// Reads BSManager's `config.json` when there is one. Problems are logged, never fatal.
-fn read_config() -> Option<Config> {
-    let text = match std::fs::read_to_string(CONFIG_FILE) {
-        Ok(text) => text,
-        Err(e) => {
-            log::debug(format!("no BSManager config.json ({e})"));
-            return None;
-        }
-    };
-    match Config::parse(&text) {
-        Ok(config) => Some(config),
-        Err(e) => {
-            log::warn(format!("BSManager's config.json is not valid JSON: {e}"));
-            None
-        }
-    }
-}
-
-/// The game Questkeep gets for an instance. `real_root` is the real Windows path of `BSInstances`
-/// (the sandbox's mount path would not start anything), when known.
-fn to_game(instance: &Instance, real_root: Option<&str>) -> ImportedGame {
+/// The game Questkeep gets for an instance. Its paths are mount paths (`/instances/<name>`):
+/// Questkeep translates them to the real ones. An instance folder name is a single path part, so
+/// the result never contains `..` (which the host would not translate).
+fn to_game(instance: &Instance) -> ImportedGame {
+    let dir = format!("{INSTANCES_MOUNT}/{}", instance.folder);
     let mut game = ImportedGame::installed(instance.source_id(), instance.game_name());
-    if let Some(root) = real_root {
-        let dir = config::join(root, &instance.folder);
-        game.play_action = Some(PlayAction {
-            args: Some(LAUNCH_ARGS.into()),
-            working_dir: Some(dir.clone()),
-            ..PlayAction::file(config::join(&dir, EXECUTABLE))
-        });
-        game.install_dir = Some(dir);
-    }
+    game.play_action = Some(PlayAction {
+        args: Some(LAUNCH_ARGS.into()),
+        working_dir: Some(dir.clone()),
+        ..PlayAction::file(format!("{dir}/{EXECUTABLE}"))
+    });
+    game.install_dir = Some(dir);
     game
 }
 
@@ -67,21 +45,11 @@ struct BsManager;
 
 impl BsManager {
     fn scan(&self) -> Result<Vec<ImportedGame>, ProviderError> {
-        let config = read_config();
-        let real_root = config.as_ref().and_then(Config::instances_dir);
-
-        if !Path::new(INSTANCES_MOUNT).is_dir() {
-            return match real_root {
-                Some(root) => Err(ProviderError::NotConfigured(format!(
-                    "BSManager keeps its instances in {root}, which this plugin may not read. Add that folder as a \"permissions.read\" entry named /instances in the plugin's plugin.json (see the plugin's README)."
-                ))),
-                None => {
-                    log::info("BSManager's instances folder was not found");
-                    Ok(Vec::new())
-                }
-            };
+        let root = Path::new(INSTANCES_MOUNT);
+        if !root.is_dir() {
+            return Err(ProviderError::NotConfigured(NOT_CONFIGURED.into()));
         }
-        let scan = instances::scan_instances(Path::new(INSTANCES_MOUNT))
+        let scan = instances::scan_instances(root)
             .map_err(|e| ProviderError::Io(format!("could not read BSManager's instances: {e}")))?;
         for (name, reason) in &scan.skipped {
             log::warn(format!("skipped {name:?}: {reason}"));
@@ -89,16 +57,7 @@ impl BsManager {
         for (name, note) in &scan.notes {
             log::warn(format!("instance {name:?}: {note}"));
         }
-        if real_root.is_none() && !scan.instances.is_empty() {
-            log::warn(
-                "could not tell where BSManager's instances really are (no installation-folder or last launched instance in its config.json): the games are listed but cannot be started from Questkeep. Start one instance from BSManager once.",
-            );
-        }
-        let games: Vec<ImportedGame> = scan
-            .instances
-            .iter()
-            .map(|i| to_game(i, real_root.as_deref()))
-            .collect();
+        let games: Vec<ImportedGame> = scan.instances.iter().map(to_game).collect();
         log::info(format!("found {} BSManager instances", games.len()));
         Ok(games)
     }
@@ -117,9 +76,10 @@ impl Provider for BsManager {
         ICON.into()
     }
 
-    /// BSManager counts as installed when its instances folder or its settings file is visible.
+    /// BSManager counts as installed when its instances folder is mounted (chosen, or the default
+    /// exists).
     fn is_installed(&self) -> bool {
-        Path::new(INSTANCES_MOUNT).is_dir() || Path::new(CONFIG_FILE).is_file()
+        Path::new(INSTANCES_MOUNT).is_dir()
     }
 
     fn scan_installed(&self) -> Result<Vec<ImportedGame>, ProviderError> {
@@ -142,27 +102,45 @@ mod tests {
     }
 
     #[test]
-    fn a_known_root_gives_real_paths_and_the_launch_arguments() {
-        let game = to_game(
-            &instance(),
-            Some(r"F:\Beat Saber stuff\BSManager\BSInstances"),
-        );
+    fn paths_are_mount_paths_and_carry_the_launch_arguments() {
+        let game = to_game(&instance());
         assert_eq!(game.source_game_id, "abc");
         assert_eq!(game.name, "Beat Saber (1.34.2)");
         assert!(game.installed);
-        let dir = r"F:\Beat Saber stuff\BSManager\BSInstances\1.34.2";
-        assert_eq!(game.install_dir.as_deref(), Some(dir));
+        assert_eq!(game.install_dir.as_deref(), Some("/instances/1.34.2"));
         let action = game.play_action.unwrap();
-        assert_eq!(action.target, format!(r"{dir}\Beat Saber.exe"));
+        assert_eq!(action.target, "/instances/1.34.2/Beat Saber.exe");
         assert_eq!(action.args.as_deref(), Some("--no-yeet"));
-        assert_eq!(action.working_dir.as_deref(), Some(dir));
+        assert_eq!(action.working_dir.as_deref(), Some("/instances/1.34.2"));
     }
 
     #[test]
-    fn an_unknown_root_lists_the_game_without_a_path() {
-        let game = to_game(&instance(), None);
-        assert!(game.install_dir.is_none());
-        assert!(game.play_action.is_none());
+    fn no_reported_path_has_a_parent_part() {
+        let mut instance = instance();
+        instance.folder = "Modded 1.29.1 (a..b)".into();
+        let game = to_game(&instance);
+        let action = game.play_action.unwrap();
+        for path in [&action.target, action.working_dir.as_ref().unwrap()] {
+            assert!(path.split('/').all(|part| part != ".."), "{path}");
+        }
+    }
+
+    #[test]
+    fn without_the_mount_the_scan_names_the_setting() {
+        // Native tests have no /instances mount.
+        if Path::new(INSTANCES_MOUNT).exists() {
+            return;
+        }
+        match BsManager.scan() {
+            Err(ProviderError::NotConfigured(message)) => {
+                assert!(
+                    message.contains("Settings > Plugins > BSManager"),
+                    "{message}"
+                );
+            }
+            other => panic!("expected NotConfigured, got {other:?}"),
+        }
+        assert!(!BsManager.is_installed());
     }
 
     #[test]
