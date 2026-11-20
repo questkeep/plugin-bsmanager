@@ -44,9 +44,28 @@ npm run changeset -- status                                 # current version, p
    3. `release` (not on dry runs) fails if `main` moved during the build, then commits
       `chore(release): vX.Y.Z` (version files and deleted changesets) as `github-actions[bot]`,
       pushes it and the annotated tag `vX.Y.Z`, and runs `gh release create` with the notes and
-      the zip.
-4. Only one release runs at a time. If `release` fails after the tag was pushed, re-run the failed
-   job: it detects the existing tag and only publishes the release (`--clobber` if it exists).
+      the zip. Every `git push` and `gh release create/upload` is retried up to 4 times (waits of
+      5, 15 and 30 seconds, `scripts/release/retry.sh`) and fails loudly after that.
+4. Only one release runs at a time.
+
+### If the release fails halfway
+
+Re-run the failed `release` job (Actions, the run, **Re-run failed jobs**). It first checks how far
+the earlier attempt got:
+
+| State found | Detection | What the re-run does |
+|---|---|---|
+| Tag `vX.Y.Z` is on origin | `git ls-remote` finds the tag | Only publishes the GitHub release (`gh release upload --clobber` if it already exists). |
+| Release commit on main, no tag | `origin/main`'s head is `chore(release): vX.Y.Z` and the tag is missing (the commit push worked, the tag push did not) | Creates the annotated tag on that commit, pushes it, then publishes the release. The version commit is not made again: the changesets are already consumed. |
+| Nothing pushed | neither of the above | The normal path: commit, push, tag, push, publish. |
+
+The "main did not move during the build" check depends on the state: on the normal path `main` must
+still be the commit the run started from; for "release commit, no tag" the release commit must sit
+directly on that commit (a re-run keeps the original commit, and main only moved by the release
+commit itself), so the tag never lands on something that was not built; when the tag already exists
+the check is skipped because nothing is pushed. If main has other commits after the release commit,
+the head is no longer recognized: tag the release commit by hand (`git tag -a vX.Y.Z <sha> && git push
+origin vX.Y.Z`) and re-run the job.
 
 The release commit is pushed with `GITHUB_TOKEN`, so GitHub does not start CI on it. If `main` has
 branch protection, allow `github-actions[bot]` to push.

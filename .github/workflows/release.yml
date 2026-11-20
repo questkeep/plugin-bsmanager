@@ -179,26 +179,45 @@ jobs:
         with:
           path: ${{ runner.temp }}/artifacts
 
-      - name: Check whether v${{ env.VERSION }} was already pushed (re-run)
+      # Three states, so a re-run can finish what an earlier run left half done:
+      #   complete    the tag v$VERSION is on origin: only the GitHub release is (re)published.
+      #   commit-only origin/main's head is `chore(release): v$VERSION` but the tag is missing (the
+      #               commit push worked, the tag push failed): tag that commit and push the tag.
+      #               The changesets are already consumed, so the version commit is not made again.
+      #   fresh       nothing was pushed: commit, tag and push everything.
+      - name: Check how far v${{ env.VERSION }} got (re-run)
         id: existing
         run: |
           if git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" > /dev/null; then
-            echo "pushed=true" >> "$GITHUB_OUTPUT"
+            echo "state=complete" >> "$GITHUB_OUTPUT"
             echo "::notice::Tag v${VERSION} already exists; skipping the commit and tag and only publishing the release."
+          elif [ "$(git log -1 --format=%s HEAD)" = "chore(release): v${VERSION}" ]; then
+            echo "state=commit-only" >> "$GITHUB_OUTPUT"
+            echo "::notice::main already has the release commit of v${VERSION} but no tag; tagging it."
           else
-            echo "pushed=false" >> "$GITHUB_OUTPUT"
+            echo "state=fresh" >> "$GITHUB_OUTPUT"
           fi
 
+      # fresh: main must still be the commit that was built. commit-only: main moved by exactly the
+      # release commit, so that commit must sit directly on the commit that was built (for a re-run
+      # the dispatched sha is the one before the release commit); anything else was not built here.
       - name: Make sure main did not move during the build
-        if: steps.existing.outputs.pushed != 'true'
+        if: steps.existing.outputs.state != 'complete'
+        env:
+          STATE: ${{ steps.existing.outputs.state }}
         run: |
-          if [ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]; then
+          if [ "$STATE" = "commit-only" ]; then
+            if [ "$(git rev-parse HEAD^)" != "$GITHUB_SHA" ] && [ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]; then
+              echo "::error::The release commit $(git rev-parse HEAD) is not directly on ${GITHUB_SHA}, the commit that was built. Do not tag it; investigate."
+              exit 1
+            fi
+          elif [ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]; then
             echo "::error::main moved from ${GITHUB_SHA} to $(git rev-parse HEAD) while the release was building. Run the release again so the build matches what is tagged."
             exit 1
           fi
 
-      - name: Commit version bump, delete changesets, tag
-        if: steps.existing.outputs.pushed != 'true'
+      - name: Commit version bump and delete changesets
+        if: steps.existing.outputs.state == 'fresh'
         run: |
           node scripts/release/changeset.mjs version --write "$VERSION"
           node scripts/release/changeset.mjs consume --list "$RUNNER_TEMP/artifacts/release-meta/consumed.txt"
@@ -206,22 +225,41 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .changeset Cargo.toml Cargo.lock plugin.json
           git commit -m "chore(release): v${VERSION}"
-          git tag -a "v${VERSION}" -m "BSManager plugin v${VERSION}"
-          git push origin HEAD:main
-          git push origin "v${VERSION}"
+
+      # Both pushes are retried; the commit goes first so a failed tag push leaves a state the
+      # next run recognizes as commit-only.
+      - name: Push the release commit
+        if: steps.existing.outputs.state == 'fresh'
+        run: |
+          . scripts/release/retry.sh
+          retry git push origin HEAD:main
+
+      - name: Tag the release commit and push the tag
+        if: steps.existing.outputs.state != 'complete'
+        run: |
+          . scripts/release/retry.sh
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${VERSION}" -m "BSManager plugin v${VERSION}" HEAD
+          retry git push origin "v${VERSION}"
 
       - name: Create GitHub release
         run: |
+          . scripts/release/retry.sh
           zip="$RUNNER_TEMP/artifacts/package/bsmanager-${VERSION}.zip"
           notes="$RUNNER_TEMP/artifacts/package/release-notes.md"
-          if gh release view "v${VERSION}" > /dev/null 2>&1; then
-            gh release upload "v${VERSION}" "$zip" --clobber
-          else
-            gh release create "v${VERSION}" "$zip" \
-              --verify-tag \
-              --title "BSManager plugin v${VERSION}" \
-              --notes-file "$notes"
-          fi
+          # The whole decision is retried: a create whose answer was lost has still made the release.
+          publish() {
+            if gh release view "v${VERSION}" > /dev/null 2>&1; then
+              gh release upload "v${VERSION}" "$zip" --clobber
+            else
+              gh release create "v${VERSION}" "$zip" \
+                --verify-tag \
+                --title "BSManager plugin v${VERSION}" \
+                --notes-file "$notes"
+            fi
+          }
+          retry publish
 
       # Optional: the organization's GitHub App (variable PLUGIN_RELEASE_APP_ID, secret
       # PLUGIN_RELEASE_APP_PRIVATE_KEY; contents and pull requests write on questkeep/plugins)
@@ -276,7 +314,8 @@ jobs:
           git config user.name "questkeep-plugin-release[bot]"
           git config user.email "noreply@github.com"
           git commit -m "feat(bsmanager): v${VERSION}"
-          git push origin "$branch"
+          . "$GITHUB_WORKSPACE/scripts/release/retry.sh"
+          retry git push origin "$branch"
           gh pr create --repo "$REGISTRY_REPO" --head "$branch" \
             --title "bsmanager v${VERSION}" \
             --body "Adds BSManager plugin v${VERSION} (release: https://github.com/${GITHUB_REPOSITORY}/releases/tag/v${VERSION})."
