@@ -26,10 +26,10 @@ folder first. Each instance appears as `Beat Saber (<instance name>)`.
 
 The plugin reads two folders (the second one is described under "Open launcher"). The instances folder is the one that contains your Beat Saber instances: BSManager's
 `BSInstances` folder. Until you choose another, Questkeep uses the default, `~/BSManager/BSInstances`
-(`C:Users<you>BSManagerBSInstances`), if it exists. If you moved BSManager's installation folder
+(`C:\Users\<you>\BSManager\BSInstances`), if it exists. If you moved BSManager's installation folder
 (BSManager, Settings, Installation folder), or the default does not exist, go to Questkeep, Settings,
 Plugins, BSManager, Folders, **Choose...** and pick the `BSInstances` folder (it is the
-`BSManagerBSInstances` folder inside the installation folder). **Use default** goes back to the
+`BSManager\BSInstances` folder inside the installation folder). **Use default** goes back to the
 default. Changing the folder syncs the plugin again. Without a usable folder the sync fails with
 "Choose the BSManager instances folder in Settings > Plugins > BSManager"; an existing folder
 without instances simply lists no games.
