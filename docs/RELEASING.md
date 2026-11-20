@@ -56,7 +56,7 @@ The registry ([`questkeep/plugins`](https://github.com/questkeep/plugins), contr
 repository's `docs/PLUGIN_REGISTRY.md`) points at the release zip and pins its sha256.
 
 - **By hand:** copy the JSON entry at the end of the release notes (or the run summary) and append
-  it to `plugins/bsmanager/versions.json` in a pull request there. `minApp` is `0.6.0`
+  it to `plugins/bsmanager/versions.json` in a pull request there. `minApp` is `0.7.0`
   (`MIN_APP` in `release.yml`); raise it when a release needs a newer Questkeep.
 - **Automatically:** the organization's GitHub App (variable `PLUGIN_RELEASE_APP_ID`, secret
   `PLUGIN_RELEASE_APP_PRIVATE_KEY`, contents and pull requests write on `questkeep/plugins`) is used

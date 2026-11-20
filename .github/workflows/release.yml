@@ -23,7 +23,7 @@ env:
   CARGO_TERM_COLOR: always
   NODE_VERSION: "24"
   # The lowest Questkeep version that can run this plugin (registry `minApp`).
-  MIN_APP: "0.6.0"
+  MIN_APP: "0.7.0"
   REGISTRY_REPO: questkeep/plugins
 
 jobs:

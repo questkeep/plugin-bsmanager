@@ -4,7 +4,7 @@
 //
 //   node scripts/release/registry-entry.mjs --version 0.1.0 --repo questkeep/plugin-bsmanager \
 //     --file bsmanager-0.1.0.zip --sha256 <hex> --size <bytes> --notes notes.md \
-//     [--min-app 0.6.0] [--released 2026-11-20] [--out entry.json]
+//     [--min-app 0.7.0] [--released 2026-11-20] [--out entry.json]
 import fs from "node:fs";
 import { buildRegistryEntry } from "./lib.mjs";
 
@@ -26,7 +26,7 @@ const entry = buildRegistryEntry({
   file: option("file"),
   sha256: option("sha256"),
   size: Number(option("size")),
-  minApp: option("min-app", "0.6.0"),
+  minApp: option("min-app", "0.7.0"),
   released: option("released", new Date().toISOString().slice(0, 10)),
   notes: fs.readFileSync(option("notes"), "utf8"),
 });
