@@ -18,7 +18,7 @@ use instances::{EXECUTABLE, Instance};
 
 /// `plugin.json` mounts the user's BSManager instances folder here.
 const INSTANCES_MOUNT: &str = "/instances";
-const ICON: &str = include_str!("../icon.svg");
+const ICON: &str = include_str!("../store-icon.svg");
 /// BSManager's launcher adds this for every instance below `BSInstances` (its `buildBsLaunchArgs`
 /// does so when the version is neither the official Steam nor Oculus install).
 const LAUNCH_ARGS: &str = "--no-yeet";

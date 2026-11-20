@@ -54,9 +54,12 @@ What the plugin does, and what it is based on. Facts are from BSManager's source
   as the working directory. For versions that are neither the official Steam nor the official
   Oculus install (every instance below `BSInstances`) it adds `--no-yeet`. When it launches through
   its Steam launcher it also sets the environment variables `SteamAppId`, `SteamOverlayGameId` and
-  `SteamGameId` (`620980`); which launcher an instance uses is decided from its store (the source
-  read for this plugin does not show that choice, so it is not verified for instances). Further arguments (`-vrmode oculus`, `fpfc`,
-  `--verbose`, `editor`) come from the launch options the user picks in BSManager.
+  `SteamGameId` (`620980`) only for Steam-store instances; the launcher is chosen from the
+  version's Steam or Oculus flag, then from the `store` in `metadata.config`, with Steam as the
+  fallback. For an Oculus-store instance it sets none of those variables (like this plugin) but
+  first tries to start the Oculus app, which a plugin cannot do: start the Oculus app yourself
+  before launching from Questkeep. Further arguments (`-vrmode oculus`, `fpfc`, `--verbose`,
+  `editor`) come from the launch options the user picks in BSManager; the plugin passes none.
 - BSManager also registers a `bsmanager://launch/?version=<version>&versionIno=<inode>` link (the
   shortcut feature in its wiki), but it needs the file system inode of the instance folder, which a
   plugin cannot read, so the plugin does not use it.
@@ -144,3 +147,7 @@ and prints the registry entry to paste. See [docs/RELEASING.md](docs/RELEASING.m
 ## License
 
 MIT, see [LICENSE](LICENSE).
+
+## Credits
+
+The icon is the BSManager logo from <https://github.com/Zagrios/bs-manager> (GPL-3.0), used to identify the program this plugin works with; see `THIRD_PARTY_NOTICES.md`. This plugin is not affiliated with BSManager or its authors.
