@@ -1,0 +1,277 @@
+name: Release
+
+# Manual "Release" button. Turns the pending changesets in `.changeset/` into a version, builds and
+# packs the plugin, commits the version bump to main, tags it and publishes a GitHub release. The
+# notes and the job summary end with the entry for the plugin registry's versions.json. See
+# docs/RELEASING.md.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: compute the version, build and pack, but commit, tag and publish nothing"
+        type: boolean
+        default: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  NODE_VERSION: "24"
+  # The lowest Questkeep version that can run this plugin (registry `minApp`).
+  MIN_APP: "0.6.0"
+  REGISTRY_REPO: questkeep/plugins
+
+jobs:
+  prepare:
+    name: Plan release
+    runs-on: ubuntu-latest
+    outputs:
+      has_release: ${{ steps.plan.outputs.has_release }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - name: Require main for a real release
+        if: ${{ !inputs.dry_run && github.ref != 'refs/heads/main' }}
+        run: |
+          echo "::error::Real releases can only run from main (this run is on ${GITHUB_REF}). Use dry_run on other branches."
+          exit 1
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Compute version and notes
+        id: plan
+        run: node scripts/release/changeset.mjs plan --out-dir "$RUNNER_TEMP/release-meta" --github-output
+
+      - name: Nothing to release
+        if: steps.plan.outputs.has_release != 'true'
+        run: |
+          echo "::notice::No pending changesets in .changeset/, so there is nothing to release."
+          echo "No pending changesets, nothing to release." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Summary
+        if: steps.plan.outputs.has_release == 'true'
+        env:
+          CURRENT: ${{ steps.plan.outputs.current }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          {
+            echo "## Release v${VERSION} (from ${CURRENT})"
+            [ "$DRY_RUN" = "true" ] && echo "**Dry run:** nothing will be committed, tagged or published."
+            echo
+            cat "$RUNNER_TEMP/release-meta/notes.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload release metadata
+        if: steps.plan.outputs.has_release == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-meta
+          path: ${{ runner.temp }}/release-meta/*
+          retention-days: 7
+          if-no-files-found: error
+
+  build:
+    name: Build and pack
+    needs: prepare
+    if: needs.prepare.outputs.has_release == 'true'
+    runs-on: windows-latest
+    defaults:
+      run:
+        # pwsh: Git Bash's `link` would shadow MSVC's link.exe.
+        shell: pwsh
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release
+
+      - name: Write version ${{ env.VERSION }} into the project files
+        run: node scripts/release/changeset.mjs version --write "$env:VERSION"
+
+      - name: Build provider.wasm
+        run: ./build.ps1
+
+      - name: Pack
+        id: pack
+        run: node scripts/pack.mjs
+
+      - name: Download release metadata
+        uses: actions/download-artifact@v8
+        with:
+          name: release-meta
+          path: ${{ runner.temp }}/release-meta
+
+      # The notes of the GitHub release (and the job summary) end with the registry entry.
+      - name: Write the registry entry and the final notes
+        env:
+          SHA256: ${{ steps.pack.outputs.sha256 }}
+          SIZE: ${{ steps.pack.outputs.size }}
+        run: |
+          $meta = Join-Path $env:RUNNER_TEMP "release-meta"
+          $out = Join-Path $env:RUNNER_TEMP "package"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          $file = "bsmanager-$env:VERSION.zip"
+          $released = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd")
+          node scripts/release/registry-entry.mjs --version $env:VERSION --repo $env:GITHUB_REPOSITORY `
+            --file $file --sha256 $env:SHA256 --size $env:SIZE --min-app $env:MIN_APP `
+            --released $released --notes "$meta/notes.md" --out "$out/registry-entry.json"
+          $entry = (Get-Content "$out/registry-entry.json" -Raw).TrimEnd()
+          $registry = @(
+            "",
+            "### Registry entry",
+            "",
+            "Append this to ``plugins/bsmanager/versions.json`` in https://github.com/$env:REGISTRY_REPO :",
+            "",
+            '```json',
+            $entry,
+            '```',
+            ""
+          ) -join "`n"
+          $notes = (Get-Content "$meta/notes.md" -Raw).TrimEnd() + "`n" + $registry
+          [System.IO.File]::WriteAllText("$out/release-notes.md", $notes)
+          Copy-Item "dist/$file" $out
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Package $file`n`n``sha256 $env:SHA256``, $env:SIZE bytes`n$registry"
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v7
+        with:
+          name: package
+          path: ${{ runner.temp }}/package/*
+          retention-days: 7
+          if-no-files-found: error
+
+  release:
+    name: Commit, tag and publish
+    needs: [prepare, build]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download release metadata and package
+        uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/artifacts
+
+      - name: Check whether v${{ env.VERSION }} was already pushed (re-run)
+        id: existing
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" > /dev/null; then
+            echo "pushed=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Tag v${VERSION} already exists; skipping the commit and tag and only publishing the release."
+          else
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Make sure main did not move during the build
+        if: steps.existing.outputs.pushed != 'true'
+        run: |
+          if [ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]; then
+            echo "::error::main moved from ${GITHUB_SHA} to $(git rev-parse HEAD) while the release was building. Run the release again so the build matches what is tagged."
+            exit 1
+          fi
+
+      - name: Commit version bump, delete changesets, tag
+        if: steps.existing.outputs.pushed != 'true'
+        run: |
+          node scripts/release/changeset.mjs version --write "$VERSION"
+          node scripts/release/changeset.mjs consume --list "$RUNNER_TEMP/artifacts/release-meta/consumed.txt"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .changeset Cargo.toml Cargo.lock plugin.json
+          git commit -m "chore(release): v${VERSION}"
+          git tag -a "v${VERSION}" -m "BSManager plugin v${VERSION}"
+          git push origin HEAD:main
+          git push origin "v${VERSION}"
+
+      - name: Create GitHub release
+        run: |
+          zip="$RUNNER_TEMP/artifacts/package/bsmanager-${VERSION}.zip"
+          notes="$RUNNER_TEMP/artifacts/package/release-notes.md"
+          if gh release view "v${VERSION}" > /dev/null 2>&1; then
+            gh release upload "v${VERSION}" "$zip" --clobber
+          else
+            gh release create "v${VERSION}" "$zip" \
+              --verify-tag \
+              --title "BSManager plugin v${VERSION}" \
+              --notes-file "$notes"
+          fi
+
+      # Optional: needs a secret REGISTRY_TOKEN (a token that can push branches to a fork or to
+      # the registry and open pull requests there). Without it the entry in the release notes is
+      # pasted by hand. Never fails the release.
+      - name: Open a registry pull request
+        continue-on-error: true
+        env:
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$REGISTRY_TOKEN" ]; then
+            echo "::notice::REGISTRY_TOKEN is not set: add the registry entry from the release notes to ${REGISTRY_REPO} by hand."
+            exit 0
+          fi
+          export GH_TOKEN="$REGISTRY_TOKEN"
+          git clone --depth 1 "https://x-access-token:${REGISTRY_TOKEN}@github.com/${REGISTRY_REPO}.git" "$RUNNER_TEMP/registry"
+          cd "$RUNNER_TEMP/registry"
+          branch="bsmanager-v${VERSION}"
+          git checkout -b "$branch"
+          node -e '
+            const fs = require("node:fs");
+            const file = "plugins/bsmanager/versions.json";
+            fs.mkdirSync("plugins/bsmanager", { recursive: true });
+            const versions = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : [];
+            const entry = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            if (versions.some((v) => v.version === entry.version)) {
+              console.log("version already listed");
+            } else {
+              versions.push(entry);
+              fs.writeFileSync(file, JSON.stringify(versions, null, 2) + "\n");
+            }
+          ' "$RUNNER_TEMP/artifacts/package/registry-entry.json"
+          if git diff --quiet; then
+            echo "::notice::The registry already lists v${VERSION}."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add plugins/bsmanager/versions.json
+          git commit -m "feat(bsmanager): v${VERSION}"
+          git push origin "$branch"
+          gh pr create --repo "$REGISTRY_REPO" --head "$branch" \
+            --title "bsmanager v${VERSION}" \
+            --body "Adds BSManager plugin v${VERSION} (release: https://github.com/${GITHUB_REPOSITORY}/releases/tag/v${VERSION})."
