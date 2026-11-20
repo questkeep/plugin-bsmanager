@@ -1,7 +1,7 @@
 {
   "id": "bsmanager",
   "name": "BSManager",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Lists the Beat Saber instances managed by BSManager, one game per instance, and opens BSManager from the Open launcher menu.",
   "author": "Questkeep",
   "icon": "icon.svg",
