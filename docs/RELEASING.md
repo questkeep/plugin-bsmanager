@@ -36,7 +36,8 @@ npm run changeset -- status                                 # current version, p
    real release only from `main`.
 3. The workflow:
    1. `prepare` computes current/next version and the notes. No changesets: stop.
-   2. `build` (Windows) writes the version into `Cargo.toml` (`[package]`), `Cargo.lock` and
+   2. `build` (Ubuntu; the plugin only returns mount paths and builds to wasm32-wasip2, so no
+      Windows is needed) writes the version into `Cargo.toml` (`[package]`), `Cargo.lock` and
       `plugin.json`, builds `provider.wasm`, packs `bsmanager-X.Y.Z.zip` (`plugin.json`,
       `provider.wasm`, `icon.svg`, `README.md`, `LICENSE` at the top level), and computes the
       sha256 and size. The notes and the job summary end with the registry `versions.json` entry.
@@ -70,5 +71,5 @@ registry entry and later ones keep it in sync. Edit `registry/meta.json` here, n
 
 ## Without GitHub
 
-`npm run build` (or `./build.ps1`) then `node scripts/pack.mjs` produces the same zip locally in
+`npm run build` (or `./build.sh` on Linux and macOS, `./build.ps1` on Windows) then `node scripts/pack.mjs` produces the same zip locally in
 `dist/`.

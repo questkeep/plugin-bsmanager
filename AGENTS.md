@@ -13,8 +13,10 @@ Guide for humans and coding agents working on the Questkeep BSManager plugin.
 | Add a changeset (every user-visible PR) | `npm run changeset -- add <major\|minor\|patch> "summary"` |
 | Version, pending changesets, next version | `npm run changeset -- status` |
 
-CI (`.github/workflows/ci.yml`) runs the same on `windows-latest`. Run cargo from PowerShell or
-cmd on Windows, not Git Bash (its `link` shadows MSVC's `link.exe`). Never invoke `python`.
+CI (`.github/workflows/ci.yml`) and the release build run on `ubuntu-latest` (the plugin only returns
+mount paths and builds to wasm32-wasip2, so Windows is not needed there). Locally on Windows run
+cargo from PowerShell or cmd, not Git Bash (its `link` shadows MSVC's `link.exe`);
+`build.ps1` is the Windows convenience script next to `build.sh`. Never invoke `python`.
 
 ## Layout
 

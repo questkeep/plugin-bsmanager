@@ -19,12 +19,8 @@ env:
 jobs:
   check:
     name: Checks and package
-    # Windows: the plugin reads BSManager's Windows folders, and this is where it runs.
-    runs-on: windows-latest
-    defaults:
-      run:
-        # pwsh: Git Bash's `link` would shadow MSVC's link.exe.
-        shell: pwsh
+    # Linux is enough: the plugin only returns mount paths (/instances/...) and builds to wasm32-wasip2.
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
@@ -54,7 +50,7 @@ jobs:
         run: node --test scripts/release/*.test.mjs scripts/*.test.mjs
 
       - name: Build provider.wasm
-        run: ./build.ps1
+        run: sh ./build.sh
 
       # Also checks plugin.json against the host's rules and that provider.wasm exists.
       - name: Pack

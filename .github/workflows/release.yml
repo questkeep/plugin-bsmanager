@@ -86,11 +86,7 @@ jobs:
     name: Build and pack
     needs: prepare
     if: needs.prepare.outputs.has_release == 'true'
-    runs-on: windows-latest
-    defaults:
-      run:
-        # pwsh: Git Bash's `link` would shadow MSVC's link.exe.
-        shell: pwsh
+    runs-on: ubuntu-latest
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
     steps:
@@ -109,10 +105,10 @@ jobs:
           shared-key: release
 
       - name: Write version ${{ env.VERSION }} into the project files
-        run: node scripts/release/changeset.mjs version --write "$env:VERSION"
+        run: node scripts/release/changeset.mjs version --write "$VERSION"
 
       - name: Build provider.wasm
-        run: ./build.ps1
+        run: sh ./build.sh
 
       - name: Pack
         id: pack
@@ -130,30 +126,24 @@ jobs:
           SHA256: ${{ steps.pack.outputs.sha256 }}
           SIZE: ${{ steps.pack.outputs.size }}
         run: |
-          $meta = Join-Path $env:RUNNER_TEMP "release-meta"
-          $out = Join-Path $env:RUNNER_TEMP "package"
-          New-Item -ItemType Directory -Force $out | Out-Null
-          $file = "bsmanager-$env:VERSION.zip"
-          $released = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd")
-          node scripts/release/registry-entry.mjs --version $env:VERSION --repo $env:GITHUB_REPOSITORY `
-            --file $file --sha256 $env:SHA256 --size $env:SIZE --min-app $env:MIN_APP `
-            --released $released --notes "$meta/notes.md" --out "$out/registry-entry.json"
-          $entry = (Get-Content "$out/registry-entry.json" -Raw).TrimEnd()
-          $registry = @(
-            "",
-            "### Registry entry",
-            "",
-            "Append this to ``plugins/bsmanager/versions.json`` in https://github.com/$env:REGISTRY_REPO :",
-            "",
-            '```json',
-            $entry,
-            '```',
-            ""
-          ) -join "`n"
-          $notes = (Get-Content "$meta/notes.md" -Raw).TrimEnd() + "`n" + $registry
-          [System.IO.File]::WriteAllText("$out/release-notes.md", $notes)
-          Copy-Item "dist/$file" $out
-          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Package $file`n`n``sha256 $env:SHA256``, $env:SIZE bytes`n$registry"
+          meta="$RUNNER_TEMP/release-meta"
+          out="$RUNNER_TEMP/package"
+          mkdir -p "$out"
+          file="bsmanager-${VERSION}.zip"
+          node scripts/release/registry-entry.mjs --version "$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --file "$file" --sha256 "$SHA256" --size "$SIZE" --min-app "$MIN_APP" \
+            --released "$(date -u +%F)" --notes "$meta/notes.md" --out "$out/registry-entry.json"
+          entry="$(cat "$out/registry-entry.json")"
+          fence='```'
+          registry="$(
+            printf '\n### Registry entry\n\n'
+            printf 'Append this to `plugins/bsmanager/versions.json` in https://github.com/%s :\n\n' "$REGISTRY_REPO"
+            printf '%sjson\n%s\n%s\n' "$fence" "$entry" "$fence"
+          )"
+          # The notes without trailing blank lines, then the registry block.
+          printf '%s\n%s\n' "$(cat "$meta/notes.md")" "$registry" > "$out/release-notes.md"
+          cp "dist/$file" "$out/"
+          printf '## Package %s\n\n`sha256 %s`, %s bytes\n%s\n' "$file" "$SHA256" "$SIZE" "$registry" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the package
         uses: actions/upload-artifact@v7
