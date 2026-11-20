@@ -1,0 +1,6 @@
+/target/
+/dist/
+/provider.wasm
+node_modules/
+.cargo/
+*.rs.bk
