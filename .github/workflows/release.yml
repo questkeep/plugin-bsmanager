@@ -233,16 +233,28 @@ jobs:
               --notes-file "$notes"
           fi
 
-      # Optional: needs a secret REGISTRY_TOKEN (a token that can push branches to a fork or to
-      # the registry and open pull requests there). Without it the entry in the release notes is
-      # pasted by hand. Never fails the release.
+      # Optional: the organization's GitHub App (variable PLUGIN_RELEASE_APP_ID, secret
+      # PLUGIN_RELEASE_APP_PRIVATE_KEY; contents and pull requests write on questkeep/plugins)
+      # opens the registry pull request. Without them the entry in the release notes is pasted by
+      # hand. Never fails the release.
+      - name: Create a registry token
+        id: registry-token
+        if: vars.PLUGIN_RELEASE_APP_ID != ''
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.PLUGIN_RELEASE_APP_ID }}
+          private-key: ${{ secrets.PLUGIN_RELEASE_APP_PRIVATE_KEY }}
+          owner: questkeep
+          repositories: plugins
+
       - name: Open a registry pull request
         continue-on-error: true
         env:
-          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+          REGISTRY_TOKEN: ${{ steps.registry-token.outputs.token }}
         run: |
           if [ -z "$REGISTRY_TOKEN" ]; then
-            echo "::notice::REGISTRY_TOKEN is not set: add the registry entry from the release notes to ${REGISTRY_REPO} by hand."
+            echo "::notice::No registry token (PLUGIN_RELEASE_APP_ID / PLUGIN_RELEASE_APP_PRIVATE_KEY): add the registry entry from the release notes to ${REGISTRY_REPO} by hand."
             exit 0
           fi
           export GH_TOKEN="$REGISTRY_TOKEN"
@@ -250,10 +262,13 @@ jobs:
           cd "$RUNNER_TEMP/registry"
           branch="bsmanager-v${VERSION}"
           git checkout -b "$branch"
+          # The listing (meta.json, icon) lives in this repository and is synced on every release.
+          mkdir -p plugins/bsmanager
+          cp "$GITHUB_WORKSPACE/registry/meta.json" plugins/bsmanager/meta.json
+          cp "$GITHUB_WORKSPACE/icon.svg" plugins/bsmanager/icon.svg
           node -e '
             const fs = require("node:fs");
             const file = "plugins/bsmanager/versions.json";
-            fs.mkdirSync("plugins/bsmanager", { recursive: true });
             const versions = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : [];
             const entry = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
             if (versions.some((v) => v.version === entry.version)) {
@@ -263,13 +278,13 @@ jobs:
               fs.writeFileSync(file, JSON.stringify(versions, null, 2) + "\n");
             }
           ' "$RUNNER_TEMP/artifacts/package/registry-entry.json"
-          if git diff --quiet; then
+          git add plugins/bsmanager
+          if git diff --cached --quiet; then
             echo "::notice::The registry already lists v${VERSION}."
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add plugins/bsmanager/versions.json
+          git config user.name "questkeep-plugin-release[bot]"
+          git config user.email "noreply@github.com"
           git commit -m "feat(bsmanager): v${VERSION}"
           git push origin "$branch"
           gh pr create --repo "$REGISTRY_REPO" --head "$branch" \

@@ -58,12 +58,15 @@ repository's `docs/PLUGIN_REGISTRY.md`) points at the release zip and pins its s
 - **By hand:** copy the JSON entry at the end of the release notes (or the run summary) and append
   it to `plugins/bsmanager/versions.json` in a pull request there. `minApp` is `0.6.0`
   (`MIN_APP` in `release.yml`); raise it when a release needs a newer Questkeep.
-- **Automatically:** add a repository secret `REGISTRY_TOKEN` (a token that may push a branch to
-  `questkeep/plugins` and open pull requests). The release then opens that pull request itself. If
-  the secret is missing, or the step fails, the release still succeeds and says so in the log.
+- **Automatically:** the organization's GitHub App (variable `PLUGIN_RELEASE_APP_ID`, secret
+  `PLUGIN_RELEASE_APP_PRIVATE_KEY`, contents and pull requests write on `questkeep/plugins`) is used
+  to open that pull request itself. The release workflow creates a short-lived token for it, pushes a
+  branch `bsmanager-vX.Y.Z` and opens the PR. If the variable or secret is missing, or the step
+  fails, the release still succeeds and says so in the log.
 
-The first time, the registry also needs `plugins/bsmanager/meta.json` and `icon.svg` (this
-repository's `icon.svg`).
+The listing itself (`registry/meta.json` and `icon.svg` of this repository) is copied into
+`plugins/bsmanager/` by the same pull request on every release, so the first release creates the
+registry entry and later ones keep it in sync. Edit `registry/meta.json` here, not in the registry.
 
 ## Without GitHub
 
