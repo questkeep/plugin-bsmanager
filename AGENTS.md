@@ -7,7 +7,7 @@ Guide for humans and coding agents working on the Questkeep BSManager plugin.
 | Task | Command |
 |---|---|
 | Format check / clippy / tests | `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` |
-| Build `provider.wasm` (needs `rustup target add wasm32-wasip2`) | `./build.ps1` or `./build.sh` |
+| Build `provider.wasm` (needs the `wasm32-wasip2` target, set up by `mise install`) | `./build.ps1` or `./build.sh` |
 | Script tests (release tooling, zip, manifest rules) | `npm test` |
 | Pack `dist/bsmanager-<version>.zip` (prints sha256, size) | `node scripts/pack.mjs` |
 | Add a changeset (every user-visible PR) | `npm run changeset -- add <major\|minor\|patch> "summary"` |

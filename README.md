@@ -117,8 +117,8 @@ What the plugin does, and what it is based on. Facts are from BSManager's source
 
 ## Development
 
-Needs Rust with the target `wasm32-wasip2` (`rustup target add wasm32-wasip2`) and Node 24 for the
-scripts.
+Needs Rust with the target `wasm32-wasip2` and Node 24 for the scripts; `mise install` sets both up
+(see [Setting up as a contributor](#setting-up-as-a-contributor) at the end).
 
 ```sh
 cargo fmt --check
@@ -171,3 +171,33 @@ MIT, see [LICENSE](LICENSE).
 ## Credits
 
 The icon is the BSManager logo from <https://github.com/Zagrios/bs-manager> (GPL-3.0), used to identify the program this plugin works with; see `THIRD_PARTY_NOTICES.md`. This plugin is not affiliated with BSManager or its authors.
+
+## Setting up as a contributor
+
+1. **Install [mise](https://mise.jdx.dev)**, which installs the right toolchain:
+
+   Linux and macOS:
+
+   ```bash
+   curl https://mise.run | sh
+   ```
+
+   macOS with Homebrew: `brew install mise`
+
+   Windows:
+
+   ```powershell
+   winget install jdx.mise
+   ```
+
+   Then [activate mise in your shell](https://mise.jdx.dev/getting-started.html#activate-mise) and
+   open a new terminal.
+
+2. **Run `mise install`** in the repository folder.
+
+3. **Windows only: install the Visual Studio Build Tools** with the C++ workload (needed to
+   compile Rust code; mise cannot install it). In an administrator terminal:
+
+   ```powershell
+   winget install --id Microsoft.VisualStudio.2022.BuildTools --exact --override "--passive --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+   ```
