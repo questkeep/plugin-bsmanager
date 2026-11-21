@@ -16,11 +16,12 @@ test("the real plugin.json is valid (provider.wasm is not required here)", () =>
   assert.equal(manifest.id, "bsmanager");
   assert.equal(manifest.apiVersion, 1);
   assert.deepEqual(manifest.permissions.http, []);
+  // The plugin finds BSManager itself: read access to files and the registry, nothing to choose,
+  // no web access.
   assert.equal(manifest.permissions.read, undefined);
-  assert.deepEqual(manifest.permissions.folders.map((f) => [f.key, f.as]), [
-    ["instances", "/instances"],
-    ["app", "/app"],
-  ]);
+  assert.equal(manifest.permissions.folders, undefined);
+  assert.equal(manifest.permissions.filesystem, "read");
+  assert.equal(manifest.permissions.registry, "read");
 });
 
 test("validateManifest checks permissions.folders like the host", () => {

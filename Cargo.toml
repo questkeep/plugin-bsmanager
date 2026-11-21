@@ -11,7 +11,10 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-questkeep-plugin-sdk = { git = "https://github.com/questkeep/questkeep", tag = "v0.6.0" }
+# TEMPORARY: the SDK APIs this plugin uses (known_folder, registry, host_path) are in no Questkeep
+# release yet, so this points at the commit that adds them (branch worktree-plugin-permissions).
+# Before releasing, switch to the release tag that contains them (v0.7.0) and delete this comment.
+questkeep-plugin-sdk = { git = "https://github.com/questkeep/questkeep", rev = "14f5b737a0874251837cb0837268049d137f3b9b" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 

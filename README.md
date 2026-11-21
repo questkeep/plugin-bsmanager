@@ -9,8 +9,13 @@ plain modules with fixture-based tests, the `Provider` is a thin layer on top.
 ## Requirements
 
 - Windows (BSManager's only supported platform for this plugin) with BSManager installed.
-- Questkeep 0.7.0 or newer (plugin API version 1, and the user-chosen folders this plugin uses; an
-  older Questkeep would ignore the folder setting and find nothing).
+- Questkeep 0.7.0 or newer (plugin API version 1, and the read access to files and the registry this
+  plugin declares; an older Questkeep would ignore it and find nothing).
+
+The plugin asks for read-only access to your files and the Windows registry
+(`permissions.filesystem` and `permissions.registry`), which Questkeep shows when you install it.
+It uses them only to find BSManager (see "Finding BSManager" below) and to read the instance
+folders; it has no web access (`http` is empty) and writes nothing.
 
 ## Install
 
@@ -19,30 +24,27 @@ plain modules with fixture-based tests, the `Provider` is a thin layer on top.
   [releases](https://github.com/questkeep/plugin-bsmanager/releases), then Settings, Plugins,
   "Install from file...".
 
-Then run a library sync. If your instances are not in the default place (see below), choose the
-folder first. Each instance appears as `Beat Saber (<instance name>)`.
+Then run a library sync. There is nothing to choose: the plugin finds BSManager by itself. Each
+instance appears as `Beat Saber (<instance name>)`.
 
-### Choosing the instances folder
+### Finding BSManager
 
-The plugin reads two folders (the second one is described under "Open launcher"). The instances folder is the one that contains your Beat Saber instances: BSManager's
-`BSInstances` folder. Until you choose another, Questkeep uses the default, `~/BSManager/BSInstances`
-(`C:\Users\<you>\BSManager\BSInstances`), if it exists. If you moved BSManager's installation folder
-(BSManager, Settings, Installation folder), or the default does not exist, go to Questkeep, Settings,
-Plugins, BSManager, Folders, **Choose...** and pick the `BSInstances` folder (it is the
-`BSManager\BSInstances` folder inside the installation folder). **Use default** goes back to the
-default. Changing the folder syncs the plugin again. Without a usable folder the sync fails with
-"Choose the BSManager instances folder in Settings > Plugins > BSManager"; an existing folder
-without instances simply lists no games.
+- **Instances folder** (BSManager's `BSInstances` folder): the plugin reads BSManager's own settings
+  file, `%APPDATA%\bs-manager\config.json`, and takes the installation folder you chose in
+  BSManager (Settings, Installation folder) from it: `<that folder>\BSManager\BSInstances`. If that
+  folder does not exist, or BSManager never wrote the setting, it tries BSManager's defaults:
+  `Documents\BSManager\BSInstances` (older versions), then `BSManager\BSInstances` in your home
+  folder. The first that exists is used. If none exists the sync fails with "BSManager's instances
+  folder was not found"; an existing folder without instances simply lists no games.
+- **Open launcher:** BSManager also appears in the title bar's **Open launcher** menu (the rocket
+  button) and starts `BSManager.exe`. The plugin finds the program through BSManager's entry in the
+  Windows "Apps" list (the folder of the exe its icon and uninstall command name), else where its
+  installer puts it for the current user, `%LOCALAPPDATA%\Programs\bs-manager`. The menu entry only
+  appears when `BSManager.exe` exists there. Nothing in the program folder is read or changed.
+  Questkeep does not close BSManager after playing.
 
-### Open launcher
-
-BSManager also appears in the title bar's **Open launcher** menu (the rocket button) and starts
-`BSManager.exe`. For that the plugin needs BSManager's program folder, the second folder setting
-(Settings, Plugins, BSManager, Folders, **BSManager program folder**). The default is
-`%LOCALAPPDATA%/Programs/bs-manager` (where BSManager's installer puts it for the current user); if
-you installed it elsewhere, choose the folder that contains `BSManager.exe`. The menu entry only
-appears when that file exists. This folder is mounted read-only and only used to find and start
-`BSManager.exe`; nothing in it is read or changed. Questkeep does not close BSManager after playing.
+Older versions of this plugin (before 0.3.0) asked you to choose these two folders in Settings,
+Plugins, BSManager, Folders. Those choices are no longer used.
 
 ## How it works
 
@@ -86,11 +88,17 @@ What the plugin does, and what it is based on. Facts are from BSManager's source
 - Play action: `Beat Saber.exe` of the instance, with working directory the instance folder and
   the argument `--no-yeet`. No environment can be set from a play action, and no other launch
   options are passed.
-- Paths: the plugin only sees the chosen folders, which Questkeep mounts read-only at
-  `/instances` and `/app` in the sandbox. It reports `/instances/<instance name>` and
-  `/instances/<instance name>/Beat Saber.exe` (and `/app/BSManager.exe` for the launcher); Questkeep translates such paths below a mount to the
-  real ones on your PC when it launches the game or opens the folder. BSManager's own `config.json`
-  is not read: the folder you choose replaces guessing the location from it.
+- Finding it: BSManager's settings are `config.json` in Electron's `userData` folder
+  (`static-configuration.service.ts` builds the store with `new ElectronStore()`), with the string
+  `installation-folder` (the parent of `BSManager\BSInstances`). The folder name
+  `%APPDATA%\bs-manager` and the contents were checked on one PC with BSManager 1.6.0 and a custom
+  installation folder; the plugin also tries `%APPDATA%\BSManager`. The program is found through
+  its uninstall entry (`BSManager <version>` from publisher Zagrios, whose `DisplayIcon` and
+  `UninstallString` name `BSManager.exe`; `InstallLocation` is empty), seen on the same PC.
+- Paths: the plugin sees your files read-only below `/host` (`D:\Games` is `/host/d/Games`). It
+  reports `/host/.../BSInstances/<instance name>` and `.../Beat Saber.exe` (and `.../BSManager.exe`
+  for the launcher); Questkeep translates such paths to the real ones on your PC when it launches
+  the game or opens the folder.
 
 **What could not be verified**
 
@@ -144,7 +152,8 @@ questkeep-plugin-sdk = { path = "../questkeep/crates/questkeep-plugin-sdk" }
 
 | Path | What |
 |---|---|
-| `src/lib.rs` | the `Provider`: the `/instances` and `/app` mounts, `launcher()`, logging, turning instances into games |
+| `src/lib.rs` | the `Provider`: finding the folders through the SDK, `launcher()`, logging, turning instances into games |
+| `src/detect.rs` | locating BSManager: its settings file, the uninstall entry, the defaults (no SDK calls, tested natively) |
 | `src/instances.rs` | reading instance folders and `metadata.config` (no SDK types) |
 | `tests/fixtures/` | made-up instance folders the tests read |
 | `scripts/` | `pack.mjs` (zip), `manifest.mjs` (the host's `plugin.json` rules), `release/` (changesets) |
