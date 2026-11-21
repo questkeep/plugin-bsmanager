@@ -107,8 +107,9 @@ What the plugin does, and what it is based on. Facts are from BSManager's source
   was run (no BSManager or game was started while building this). `store: "oculus"` instances
   normally need the Oculus app to be running.
 - That `BSManager.exe` started directly behaves like BSManager's own shortcut (its `bsmanager://` handler runs the same exe); the launcher was checked against Questkeep's plugin host without starting anything. The default program folder is the NSIS per-user default (`%LOCALAPPDATA%/Programs/bs-manager`), seen on one PC, not taken from BSManager's source.
-- The default location (`~/BSManager`) was established from the source; the old
-  `Documents/BSManager` location is not the default (choose it as the folder if you still use it).
+- The default location (`~/BSManager`) was established from the source. The old
+  `Documents/BSManager` location is not the default, but the plugin still tries it as a fallback
+  when BSManager's settings name no existing folder.
 - The path translation was checked by loading the built `provider.wasm` in Questkeep's plugin host
   against a copy of the test fixtures (not by running the app).
 - Instance versions are not shown: BSManager reads them from the binary `globalgamemanagers`
