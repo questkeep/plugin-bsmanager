@@ -117,7 +117,7 @@ What the plugin does, and what it is based on. Facts are from BSManager's source
 
 ## Development
 
-Needs Rust with the target `wasm32-wasip2` and Node 24 for the scripts; `mise install` sets both up
+Needs Rust with the target `wasm32-wasip2` and Node 26 for the scripts; `mise install` sets both up
 (see [Setting up as a contributor](#setting-up-as-a-contributor) at the end).
 
 ```sh

@@ -2,9 +2,9 @@
   "name": "plugin-bsmanager",
   "version": "0.0.0",
   "private": true,
-  "description": "Release tooling of the Questkeep BSManager plugin (no dependencies, Node 24).",
+  "description": "Release tooling of the Questkeep BSManager plugin (no dependencies, Node 26).",
   "type": "module",
-  "engines": { "node": ">=24" },
+  "engines": { "node": ">=26" },
   "scripts": {
     "changeset": "node scripts/release/changeset.mjs",
     "build": "node scripts/build.mjs",
