@@ -137,7 +137,7 @@ building). Press Reload after every rebuild.
 `Cargo.toml` depends on the SDK at a release tag:
 
 ```toml
-questkeep-plugin-sdk = { git = "https://github.com/questkeep/questkeep", tag = "v0.6.0" }
+questkeep-plugin-sdk = { git = "https://github.com/questkeep/questkeep", tag = "v0.7.0" }
 ```
 
 To use your own checkout instead, add (to `Cargo.toml`, or a `.cargo/config.toml` that stays

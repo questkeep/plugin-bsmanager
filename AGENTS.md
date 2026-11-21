@@ -41,8 +41,6 @@ cargo from PowerShell or cmd, not Git Bash (its `link` shadows MSVC's `link.exe`
 - Paths reported for games are paths below `/host` (`/host/d/Games/.../<name>`): Questkeep
   translates paths below the file system mount to real ones. Never build a path with a `..` part
   (it is not translated). The plugin needs Questkeep 0.7.0 (`MIN_APP` in `release.yml`).
-- `Cargo.toml` points the SDK at a commit (`rev`) until Questkeep 0.7.0 is released: switch it to
-  the `v0.7.0` tag before releasing this plugin.
 - Do not invent facts about BSManager: cite its source in the README's "How it works" or choose the
   conservative behavior and say so there.
 - Conventional Commits. Every user-visible change adds a changeset; docs/CI-only changes do not.
