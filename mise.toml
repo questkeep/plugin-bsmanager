@@ -3,4 +3,4 @@
 # Versions are pinned exactly so every machine and CI run uses the same toolchain; bump them here.
 [tools]
 node = "26.13.1"
-rust = { version = "stable", profile = "minimal", components = "clippy,rustfmt", targets = "wasm32-wasip2" }
+rust = { version = "1.100.0", profile = "minimal", components = "clippy,rustfmt", targets = "wasm32-wasip2" }

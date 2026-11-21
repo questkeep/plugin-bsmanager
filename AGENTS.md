@@ -32,6 +32,10 @@ cargo from PowerShell or cmd, not Git Bash (its `link` shadows MSVC's `link.exe`
 
 ## Conventions
 
+- **Toolchain pins:** `mise.toml` pins exact versions; `.github/workflows/update-toolchain.yml` (calls
+  `questkeep/workflows`) lists every pinned tool in its `tools` input with a version label (`lts`,
+  `latest` or a prefix). **When you add or remove a tool in `mise.toml`, update that list in the same
+  change**; the workflow fails when a pinned tool is missing from it.
 - No `unwrap()`/`expect()` outside tests. A broken or odd instance folder is skipped with
   `log::warn`; it never aborts the scan.
 - Paths reported for games are paths below `/host` (`/host/d/Games/.../<name>`): Questkeep
